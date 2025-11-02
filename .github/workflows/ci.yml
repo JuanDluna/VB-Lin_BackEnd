@@ -43,21 +43,80 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
 
       - name: Instalar dependencias
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Configurar variables de entorno
         run: |
-          cp .env.example .env
-          sed -i 's|MONGO_URI=.*|MONGO_URI=mongodb://root:password@localhost:27017/prestamosdb?authSource=admin|g' .env
-          sed -i 's|REDIS_HOST=.*|REDIS_HOST=localhost|g' .env
-          sed -i 's|REDIS_PORT=.*|REDIS_PORT=6379|g' .env
+          echo "Configurando variables de entorno..."
+          if [ -f env.example ]; then
+            cp env.example .env
+          elif [ -f .env.example ]; then
+            cp .env.example .env
+          else
+            echo "Creando .env desde cero..."
+            cat > .env << 'EOF'
+PORT=4000
+NODE_ENV=test
+JWT_SECRET=test_jwt_secret
+JWT_ACCESS_EXPIRES=2h
+JWT_REFRESH_SECRET=test_refresh_secret
+JWT_REFRESH_EXPIRES=7d
+MONGO_URI=mongodb://root:password@localhost:27017/prestamosdb?authSource=admin
+REDIS_HOST=localhost
+REDIS_PORT=6379
+SMTP_HOST=smtp.example.com
+SMTP_PORT=465
+SMTP_USER=user@example.com
+SMTP_PASS=pass
+FIREBASE_CREDENTIALS_PATH=/secrets/firebase.json
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+EOF
+          fi
+          # Asegurar que las variables críticas estén configuradas
+          if ! grep -q "^MONGO_URI=" .env; then
+            echo "MONGO_URI=mongodb://root:password@localhost:27017/prestamosdb?authSource=admin" >> .env
+          else
+            sed -i 's|^MONGO_URI=.*|MONGO_URI=mongodb://root:password@localhost:27017/prestamosdb?authSource=admin|g' .env
+          fi
+          if ! grep -q "^REDIS_HOST=" .env; then
+            echo "REDIS_HOST=localhost" >> .env
+          else
+            sed -i 's|^REDIS_HOST=.*|REDIS_HOST=localhost|g' .env || true
+          fi
+          if ! grep -q "^REDIS_PORT=" .env; then
+            echo "REDIS_PORT=6379" >> .env
+          else
+            sed -i 's|^REDIS_PORT=.*|REDIS_PORT=6379|g' .env || true
+          fi
+          if ! grep -q "^JWT_SECRET=" .env; then
+            echo "JWT_SECRET=test_jwt_secret" >> .env
+          fi
+          if ! grep -q "^JWT_REFRESH_SECRET=" .env; then
+            echo "JWT_REFRESH_SECRET=test_refresh_secret" >> .env
+          fi
+          echo "Variables de entorno configuradas:"
+          cat .env | grep -E "^(MONGO_URI|REDIS_HOST|REDIS_PORT|JWT_|NODE_ENV)="
 
       - name: Esperar a que MongoDB esté listo
         run: |
-          timeout 60 bash -c 'until echo "db.runCommand(\"ping\").ok" | mongosh "mongodb://root:password@localhost:27017/prestamosdb?authSource=admin" --quiet; do sleep 2; done'
+          echo "Esperando a que MongoDB esté disponible..."
+          for i in {1..30}; do
+            if mongosh "mongodb://root:password@localhost:27017/prestamosdb?authSource=admin" --quiet --eval "db.runCommand({ping:1})" > /dev/null 2>&1; then
+              echo "MongoDB está disponible!"
+              exit 0
+            fi
+            echo "Intento $i/30: MongoDB no está disponible aún, esperando..."
+            sleep 2
+          done
+          echo "Error: MongoDB no está disponible después de 60 segundos"
+          exit 1
 
       - name: Ejecutar lint
         run: npm run lint
