@@ -79,7 +79,7 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y netcat-openbsd || sudo apt-get install -y netcat || true
 
-      - name: Esperar a que MongoDB esté listo (hostname: mongodb)
+      - name: Esperar a que MongoDB esté listo (hostname-> mongodb)
         run: |
           echo "Esperando a que el servicio mongodb responda en mongodb:27017..."
           for i in {1..30}; do
