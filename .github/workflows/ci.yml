@@ -61,23 +61,21 @@ jobs:
             cp .env.example .env
           else
             echo "Creando .env desde cero..."
-            cat > .env << 'EOF'
-              PORT=4000
-              NODE_ENV=test
-              JWT_SECRET=test_jwt_secret
-              JWT_ACCESS_EXPIRES=2h
-              JWT_REFRESH_SECRET=test_refresh_secret
-              JWT_REFRESH_EXPIRES=7d
-              MONGO_URI=mongodb://root:password@localhost:27017/prestamosdb?authSource=admin
-              REDIS_HOST=localhost
-              REDIS_PORT=6379
-              SMTP_HOST=smtp.example.com
-              SMTP_PORT=465
-              SMTP_USER=user@example.com
-              SMTP_PASS=pass
-              FIREBASE_CREDENTIALS_PATH=/secrets/firebase.json
-              ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
-              EOF
+            echo "PORT=4000" > .env
+            echo "NODE_ENV=test" >> .env
+            echo "JWT_SECRET=test_jwt_secret" >> .env
+            echo "JWT_ACCESS_EXPIRES=2h" >> .env
+            echo "JWT_REFRESH_SECRET=test_refresh_secret" >> .env
+            echo "JWT_REFRESH_EXPIRES=7d" >> .env
+            echo "MONGO_URI=mongodb://root:password@localhost:27017/prestamosdb?authSource=admin" >> .env
+            echo "REDIS_HOST=localhost" >> .env
+            echo "REDIS_PORT=6379" >> .env
+            echo "SMTP_HOST=smtp.example.com" >> .env
+            echo "SMTP_PORT=465" >> .env
+            echo "SMTP_USER=user@example.com" >> .env
+            echo "SMTP_PASS=pass" >> .env
+            echo "FIREBASE_CREDENTIALS_PATH=/secrets/firebase.json" >> .env
+            echo "ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080" >> .env
           fi
           # Asegurar que las variables críticas estén configuradas
           if ! grep -q "^MONGO_URI=" .env; then
@@ -102,7 +100,7 @@ jobs:
             echo "JWT_REFRESH_SECRET=test_refresh_secret" >> .env
           fi
           echo "Variables de entorno configuradas:"
-          cat .env | grep -E "^(MONGO_URI|REDIS_HOST|REDIS_PORT|JWT_|NODE_ENV)="
+          grep -E "^(MONGO_URI|REDIS_HOST|REDIS_PORT|JWT_|NODE_ENV)=" .env || true
 
       - name: Esperar a que MongoDB esté listo
         run: |
@@ -148,4 +146,3 @@ jobs:
           file: ./coverage/lcov.info
           flags: unittests
           name: codecov-umbrella
-
