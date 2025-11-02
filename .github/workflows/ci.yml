@@ -62,22 +62,22 @@ jobs:
           else
             echo "Creando .env desde cero..."
             cat > .env << 'EOF'
-PORT=4000
-NODE_ENV=test
-JWT_SECRET=test_jwt_secret
-JWT_ACCESS_EXPIRES=2h
-JWT_REFRESH_SECRET=test_refresh_secret
-JWT_REFRESH_EXPIRES=7d
-MONGO_URI=mongodb://root:password@localhost:27017/prestamosdb?authSource=admin
-REDIS_HOST=localhost
-REDIS_PORT=6379
-SMTP_HOST=smtp.example.com
-SMTP_PORT=465
-SMTP_USER=user@example.com
-SMTP_PASS=pass
-FIREBASE_CREDENTIALS_PATH=/secrets/firebase.json
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
-EOF
+              PORT=4000
+              NODE_ENV=test
+              JWT_SECRET=test_jwt_secret
+              JWT_ACCESS_EXPIRES=2h
+              JWT_REFRESH_SECRET=test_refresh_secret
+              JWT_REFRESH_EXPIRES=7d
+              MONGO_URI=mongodb://root:password@localhost:27017/prestamosdb?authSource=admin
+              REDIS_HOST=localhost
+              REDIS_PORT=6379
+              SMTP_HOST=smtp.example.com
+              SMTP_PORT=465
+              SMTP_USER=user@example.com
+              SMTP_PASS=pass
+              FIREBASE_CREDENTIALS_PATH=/secrets/firebase.json
+              ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+              EOF
           fi
           # Asegurar que las variables críticas estén configuradas
           if ! grep -q "^MONGO_URI=" .env; then
