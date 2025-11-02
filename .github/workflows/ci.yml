@@ -103,18 +103,29 @@ jobs:
           echo "Variables de entorno configuradas:"
           grep -E "^(MONGO_URI|REDIS_HOST|REDIS_PORT|JWT_|NODE_ENV)=" .env || true
 
+      - name: Instalar herramientas de red
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y netcat-openbsd || sudo apt-get install -y netcat || echo "netcat ya instalado"
+
       - name: Esperar a que MongoDB esté listo
         run: |
           echo "Esperando a que MongoDB esté disponible..."
+          # Verificar que el puerto esté abierto
           for i in {1..30}; do
-            if mongosh "mongodb://root:password@localhost:27017/prestamosdb?authSource=admin" --quiet --eval "db.runCommand({ping:1})" > /dev/null 2>&1; then
-              echo "MongoDB está disponible!"
+            if nc -z localhost 27017 2>/dev/null; then
+              echo "MongoDB está disponible! (puerto 27017 abierto)"
+              # Esperar un poco más para que MongoDB termine de inicializarse
+              sleep 3
+              echo "MongoDB listo para conexiones"
               exit 0
             fi
             echo "Intento $i/30: MongoDB no está disponible aún, esperando..."
             sleep 2
           done
           echo "Error: MongoDB no está disponible después de 60 segundos"
+          echo "Verificando estado del puerto..."
+          nc -zv localhost 27017 || echo "Puerto 27017 no responde"
           exit 1
 
       - name: Ejecutar lint
