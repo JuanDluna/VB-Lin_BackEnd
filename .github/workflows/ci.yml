@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:6
+        ports:
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: password
+          MONGO_INITDB_DATABASE: prestamosdb
+        options: >-
+          --health-cmd "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:6-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Configurar variables de entorno
+        run: |
+          cp .env.example .env
+          sed -i 's|MONGO_URI=.*|MONGO_URI=mongodb://root:password@localhost:27017/prestamosdb?authSource=admin|g' .env
+          sed -i 's|REDIS_HOST=.*|REDIS_HOST=localhost|g' .env
+          sed -i 's|REDIS_PORT=.*|REDIS_PORT=6379|g' .env
+
+      - name: Esperar a que MongoDB esté listo
+        run: |
+          timeout 60 bash -c 'until echo "db.runCommand(\"ping\").ok" | mongosh "mongodb://root:password@localhost:27017/prestamosdb?authSource=admin" --quiet; do sleep 2; done'
+
+      - name: Ejecutar lint
+        run: npm run lint
+
+      - name: Compilar TypeScript
+        run: npm run build
+
+      - name: Ejecutar seeds
+        run: npm run seed
+        env:
+          MONGO_URI: mongodb://root:password@localhost:27017/prestamosdb?authSource=admin
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          NODE_ENV: test
+
+      - name: Ejecutar tests
+        run: npm test -- --coverage
+        env:
+          MONGO_URI: mongodb://root:password@localhost:27017/prestamosdb?authSource=admin
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          NODE_ENV: test
+          JWT_SECRET: test_jwt_secret
+          JWT_REFRESH_SECRET: test_refresh_secret
+
+      - name: Subir cobertura
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+

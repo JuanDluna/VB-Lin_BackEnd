@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vb-lin-api
+    ports:
+      - '4000:4000'
+    environment:
+      - PORT=4000
+      - NODE_ENV=development
+      - JWT_SECRET=${JWT_SECRET:-changeme_jwt_secret}
+      - JWT_ACCESS_EXPIRES=${JWT_ACCESS_EXPIRES:-2h}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-changeme_refresh_secret}
+      - JWT_REFRESH_EXPIRES=${JWT_REFRESH_EXPIRES:-7d}
+      - MONGO_URI=mongodb://root:password@mongo:27017/prestamosdb?authSource=admin
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SMTP_HOST=${SMTP_HOST:-smtp.example.com}
+      - SMTP_PORT=${SMTP_PORT:-465}
+      - SMTP_USER=${SMTP_USER:-user@example.com}
+      - SMTP_PASS=${SMTP_PASS:-pass}
+      - FIREBASE_CREDENTIALS_PATH=${FIREBASE_CREDENTIALS_PATH:-/secrets/firebase.json}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080,http://127.0.0.1:9090}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./secrets:/secrets:ro
+    restart: unless-stopped
+    networks:
+      - vb-lin-network
+
+  # MongoDB
+  mongo:
+    image: mongo:6
+    container_name: vb-lin-mongo
+    ports:
+      - '27017:27017'
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=prestamosdb
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - vb-lin-network
+
+  # Redis
+  redis:
+    image: redis:6-alpine
+    container_name: vb-lin-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - vb-lin-network
+
+volumes:
+  mongo-data:
+    name: vb-lin-mongo-data
+  redis-data:
+    name: vb-lin-redis-data
+
+networks:
+  vb-lin-network:
+    name: vb-lin-network
+
