@@ -1,4 +1,4 @@
-import { Notification, INotification, User } from '../models';
+import { Notification, INotification } from '../models';
 import { AppError } from '../middlewares/errorHandler';
 import { getRedisClient } from '../utils/redis';
 import * as admin from 'firebase-admin';
@@ -14,11 +14,13 @@ export class NotificationService {
   private static async initFirebase(): Promise<void> {
     if (!admin.apps.length && config.firebaseCredentialsPath) {
       try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const serviceAccount = require(config.firebaseCredentialsPath);
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
         });
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.warn('[NotificationService] Firebase no configurado o credenciales inválidas');
       }
     }

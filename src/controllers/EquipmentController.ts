@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
 import { EquipmentService } from '../services/EquipmentService';
-import { AppError } from '../middlewares/errorHandler';
 
 /**
  * Controlador de equipos

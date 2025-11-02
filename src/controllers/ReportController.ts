@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
 import { ReportService } from '../services/ReportService';
-import { AppError } from '../middlewares/errorHandler';
 
 /**
  * Controlador de reportes (solo admin)
