@@ -1,4 +1,4 @@
-name: CI (básico y tolerante)
+name: CI (básico, mongo sin auth)
 
 on:
   push:
@@ -38,90 +38,70 @@ jobs:
             npm install --no-audit --no-fund
           fi
 
-      - name: Configurar .env mínimo (fallback tolerante)
+      - name: Configurar .env mínimo (sin auth)
         run: |
-          echo "Configurando variables de entorno..."
-          if [ -f .env.example ]; then
-            cp .env.example .env
-          elif [ -f env.example ]; then
-            cp env.example .env
-          else
-            cat > .env <<EOF
+          cat > .env <<EOF
           PORT=4000
           NODE_ENV=test
           JWT_SECRET=test_jwt_secret
           JWT_ACCESS_EXPIRES=2h
           JWT_REFRESH_SECRET=test_refresh_secret
           JWT_REFRESH_EXPIRES=7d
-          MONGO_URI=mongodb://root:password@mongodb:27017/prestamosdb?authSource=admin
+          MONGO_URI=mongodb://mongodb:27017/prestamosdb
           REDIS_HOST=redis
           REDIS_PORT=6379
-          SMTP_HOST=smtp.example.com
-          SMTP_PORT=465
-          SMTP_USER=user@example.com
-          SMTP_PASS=pass
-          FIREBASE_CREDENTIALS_PATH=/secrets/firebase.json
-          ALLOWED_ORIGINS=http://localhost:3000
           EOF
-          fi
-          sed -i 's|^MONGO_URI=.*|MONGO_URI=mongodb://root:password@mongodb:27017/prestamosdb?authSource=admin|' .env || true
-          sed -i 's|^REDIS_HOST=.*|REDIS_HOST=redis|' .env || true
-          sed -i 's|^REDIS_PORT=.*|REDIS_PORT=6379|' .env || true
-          echo "Contenido .env (líneas relevantes):"
-          grep -E "^(MONGO_URI|REDIS_HOST|REDIS_PORT|JWT_SECRET|NODE_ENV)=" .env || true
+          echo "-> .env creado; MONGO_URI=$(grep '^MONGO_URI=' .env)"
 
-      - name: Instalar herramientas de red
+      - name: Instalar netcat para checks
         run: |
           sudo apt-get update -y
           sudo apt-get install -y netcat-openbsd || sudo apt-get install -y netcat || true
 
-      - name: Esperar a que MongoDB esté listo (hostname-> mongodb)
+      - name: Esperar MongoDB (hasta ~120s)
         run: |
-          echo "Esperando a que el servicio mongodb responda en mongodb:27017..."
-          for i in {1..30}; do
+          echo "Esperando a mongodb:27017..."
+          for i in {1..60}; do
             if nc -z mongodb 27017 2>/dev/null; then
-              echo "MongoDB disponible (mongodb:27017)"
+              echo "MongoDB listo (intento $i)"
               sleep 2
               exit 0
             fi
-            echo "Intento $i/30: MongoDB no responde todavía, esperando 2s..."
+            echo "Intento $i/60: esperando..."
             sleep 2
           done
-          echo "MongoDB no disponible tras los intentos; fallando."
-          nc -zv mongodb 27017 || true
+          echo "ERROR: MongoDB no respondió en el tiempo esperado."
           exit 1
 
-      - name: Ejecutar seed (si existe script 'seed')
+      - name: Ejecutar seed (si existe)
         run: |
           if npm run | grep -q " seed"; then
-            echo "Script 'seed' detectado, ejecutando npm run seed..."
-            npm run seed || echo "npm run seed finalizó con errores (se continúa)"
+            npm run seed || echo "Seed falló (se continúa)"
           else
-            echo "No se detectó script 'seed' — se omite."
+            echo "No hay script seed - se omite"
           fi
         env:
-          MONGO_URI: mongodb://root:password@mongodb:27017/prestamosdb?authSource=admin
+          MONGO_URI: mongodb://mongodb:27017/prestamosdb
           REDIS_HOST: redis
           REDIS_PORT: 6379
           NODE_ENV: test
 
-      - name: Ejecutar tests (si existe script 'test')
+      - name: Ejecutar tests (si existen)
         run: |
           if npm run | grep -q " test"; then
-            echo "Script 'test' detectado, ejecutando npm test..."
-            npm test -- --coverage || echo "npm test terminó con código distinto a cero (revisar logs)"
+            npm test -- --coverage || echo "Tests fallaron (revisar logs)"
           else
-            echo "No se detectó script 'test' — se omite."
+            echo "No hay script test - se omite"
           fi
         env:
-          MONGO_URI: mongodb://root:password@mongodb:27017/prestamosdb?authSource=admin
+          MONGO_URI: mongodb://mongodb:27017/prestamosdb
           REDIS_HOST: redis
           REDIS_PORT: 6379
           NODE_ENV: test
           JWT_SECRET: test_jwt_secret
           JWT_REFRESH_SECRET: test_refresh_secret
 
-      - name: Upload coverage artifact (si existe)
+      - name: Subir coverage si existe
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
