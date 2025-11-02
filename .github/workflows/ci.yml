@@ -1,10 +1,11 @@
-name: CI
+name: CI (básico y tolerante)
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, develop ]
   pull_request:
-    branches: [main, develop]
+    branches: [ main, develop ]
+  workflow_dispatch: {}
 
 jobs:
   test:
