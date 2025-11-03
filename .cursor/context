@@ -1,18 +1,18 @@
-CONTEXT: Proyecto "Sistema de Gestión de Préstamo de Equipos en Laboratorios" (UAA) — Avance / Presentación de Mayo 2025
+PROJECT CONTEXT: VB-Lin_BackEnd (tesina UAA) — estado actual y requerimientos
 
-Resumen del proyecto (lo que ya existe)
-- Frontend: Flutter (web + móvil) — la app web está desarrollada; la app móvil se desarrollará con Flutter y consumirá esta API. Mantener compatibilidad con Flutter (requests REST + Authorization header).
-- Dashboard web: React.js (se prevé) — backend debe servir endpoints consumibles por dashboard.
-- En la presentación se menciona como DB: MongoDB (historial, usuarios, equipos). Mantener MongoDB.
+Resumen del estado actual (usa esto como fuente de verdad)
+- Ya hay una base de datos creada localmente y en Atlas llamada "VB-Lin_BackEnd" con colecciones: users, equipment, loans, notifications. Se ejecutó un script de setup local con seeds básicos.
+- En el repositorio hay package.json con scripts usando tsx y dependencias listadas (mongoose, express, jwt, redis, firebase-admin, nodemailer, jest, supertest, tsx).
+- CI: ya existe un workflow en .github/workflows/ci.yml que debe ser conservado/ajustado (workflow básico tolerante).
 
-Entidades y campos mínimos (usar exactamente estos nombres en los modelos si aplica)
+Modelos y nombres de campos (usar exactamente estos nombres)
 1) users:
   - _id (ObjectId)
   - email (string, unique)
   - passwordHash (string)
   - firstName (string)
   - lastName (string)
-  - role (string enum: 'estudiante'|'profesor'|'admin')
+  - role (enum: 'estudiante'|'profesor'|'admin')
   - active (boolean)
   - createdAt (Date)
   - lastAccess (Date)
@@ -30,12 +30,12 @@ Entidades y campos mínimos (usar exactamente estos nombres en los modelos si ap
 
 3) loans:
   - _id (ObjectId)
-  - userId (ObjectId -> users)
-  - equipmentId (ObjectId -> equipment)
+  - userId (ObjectId ref users)
+  - equipmentId (ObjectId ref equipment)
   - reservedAt (Date)
-  - startDate (Date)                <-- fecha inicio de préstamo/reserva
-  - endDate (Date)                  <-- fecha fin esperada de devolución
-  - checkoutAt (Date | null)        <-- cuando se entrega físicamente (admin)
+  - startDate (Date)
+  - endDate (Date)
+  - checkoutAt (Date | null)
   - returnedAt (Date | null)
   - status (enum: 'reservado'|'activo'|'devuelto'|'vencido')
   - reservationRemarks (string)
@@ -44,36 +44,39 @@ Entidades y campos mínimos (usar exactamente estos nombres en los modelos si ap
 4) notifications:
   - _id (ObjectId)
   - userId (ObjectId)
-  - type (string: 'reserva'|'recordatorio'|'vencimiento')
+  - type (enum: 'reserva'|'recordatorio'|'vencimiento')
   - message (string)
   - read (boolean)
   - sentAt (Date)
 
-Reglas de negocio (firmes):
+5) fcmTokens (opcional):
+  - _id, userId, token, platform, createdAt
+
+Reglas de negocio (firmes)
 - Estudiantes: reserva máxima 3 días.
 - Profesores: reserva máxima 7 días.
 - No permitir solapamiento de reservas/activos para un mismo equipment en el rango [startDate, endDate].
-- Cuando un préstamo pasa su endDate y no se devuelve, su status pasa a 'vencido' (cron job o job de comprobación periódica) y se notifica.
 - Reservas se crean con status 'reservado'. Un admin realiza checkout para marcar 'activo' (registro de checkoutAt).
-- Retornos: cuando se hace return se registra returnedAt y status 'devuelto'; si hay daño, registrar returnRemarks.
+- Cuando un préstamo pasa su endDate y no se devuelve, su status pasa a 'vencido' (cron job o job manual) y se notifica.
+- Al crear reserva se crea notificación de tipo 'reserva' y se intenta enviar push/email (si no hay credenciales, guardar notificación y loggear envío simulado).
 
-Endpoints esperados (debe generarlos):
+Endpoints esperados (implementa todos, con validaciones y ejemplos)
 - Auth:
-  - POST /api/auth/login -> { email, password } -> 200 { success:true, data: { token, refreshToken, user } }
-  - POST /api/auth/refresh -> { refreshToken } -> 200 { token, refreshToken }
-  - POST /api/auth/logout -> { refreshToken } -> 200 { success:true }
-  - POST /api/auth/forgot-password -> { email }
-  - POST /api/auth/reset-password -> { token, newPassword }
+  - POST /api/auth/register  {email,password,firstName,lastName}
+  - POST /api/auth/login     {email,password} -> { token, refreshToken, user }
+  - POST /api/auth/refresh   { refreshToken } -> { token, refreshToken }
+  - POST /api/auth/logout    { refreshToken }
+  - POST /api/auth/forgot-password {email}
+  - POST /api/auth/reset-password  { token, newPassword }
 
 - Users:
-  - GET /api/users?page=1&limit=20 (admin)
+  - GET /api/users?page=&limit= (admin) 
   - GET /api/users/:id
-  - POST /api/users/register -> register new user (initial role 'estudiante' by default)
   - PUT /api/users/:id
   - DELETE /api/users/:id (admin)
 
 - Equipment:
-  - GET /api/equipment?page=&limit=&q= (filter by name/category)
+  - GET /api/equipment?page=&limit=&q=
   - GET /api/equipment/:id
   - POST /api/equipment (admin)
   - PUT /api/equipment/:id (admin)
@@ -82,16 +85,16 @@ Endpoints esperados (debe generarlos):
 - Loans:
   - GET /api/loans?page=&limit=&status=&userId=
   - GET /api/loans/:id
-  - POST /api/loans/reserve -> { equipmentId, startDate, endDate } (authenticated)
-  - PUT /api/loans/:id/checkout -> admin marks checkoutAt and status 'activo'
-  - PUT /api/loans/:id/return -> { returnRemarks? } (auth user or admin)
+  - POST /api/loans/reserve { equipmentId, startDate, endDate } (auth)
+  - PUT /api/loans/:id/checkout (admin) -> set checkoutAt, status 'activo'
+  - PUT /api/loans/:id/return { returnRemarks? } -> set returnedAt, status 'devuelto'
   - GET /api/loans/user/:userId
 
 - Notifications:
   - GET /api/notifications?page=&limit=
   - PUT /api/notifications/:id/read
-  - POST /api/notifications/register -> { fcmToken } (store mapping userId->fcmToken)
-  - POST /api/notifications/send -> (admin) { userId, type, message }
+  - POST /api/notifications/register { fcmToken } (auth)
+  - POST /api/notifications/send (admin) { userId, type, message }
 
 - Reports (admin):
   - GET /api/reports/usage?from=&to=
@@ -99,77 +102,54 @@ Endpoints esperados (debe generarlos):
   - GET /api/reports/user-activity
   - GET /api/reports/overdue
 
-Seguridad y middlewares:
-- helmet, express-rate-limit, cors (ALLOWED_ORIGINS desde .env), morgan (dev), express-validator for inputs
-- authMiddleware: verificar JWT access token
-- roleMiddleware(allowedRoles: string[])
-- errorHandler centralizado
-- Input/response shape: always `{ success:boolean, data?:any, error?:string }`
+Responses & error handling
+- All responses JSON: { success: boolean, data?: any, error?: string }
+- Use proper HTTP codes: 200, 201, 400, 401, 403, 404, 409, 500
+- On solapamiento -> 409 Conflict with message clear
 
-Autenticación y tokens:
-- ACCESS TOKEN (JWT): expiración por default 2h (configurable desde .env)
-- REFRESH TOKEN (JWT): expiración por default 7d (configurable desde .env)
-- Guardar refresh tokens en Redis con key `refresh:<userId>:<token>` para revocación en logout/refresh rotation
+Persistence of refresh tokens
+- Use Redis. Key: refresh:<userId>:<refreshToken> TTL = refresh expiry
+- Implement refresh token rotation, revoke old token on refresh and logout
 
-Notificaciones:
-- Integrar **Firebase Admin** para envío push (en dev: simular envío y registrar logs).
-- Integrar **nodemailer** para correos (SMTP configurado via .env) — usado en forgot-password y confirmaciones.
+Notifications behavior
+- If FIREBASE_CREDENTIALS_PATH env points to a valid file, initialize admin SDK and send pushes.
+- If not present, only store notification documents and log simulated push.
 
-Runner / Docker compose (DEBE generarlo así):
-- api (construido desde Dockerfile)
-- mongo (image: mongo:6) con volumen `mongo-data`
-- redis (image: redis:6) con volumen `redis-data`
+Scripts and CI expectations
+- scripts/wait-for-db.ts (checks Mongo) used by CI and dev
+- scripts/seed.ts creates users (admin, profesor, estudiante), equipment (5 items) and at least 1 active loan
+- .github/workflows/ci.yml: keep the basic tolerant workflow (fast) already used by user
+- Provide Dockerfile + docker-compose.yml (api + mongo + redis). For dev mount volume (./:/usr/src/app) and use npm run dev
 
-Provisión de .env.example (incluir exactamente estas variables):
-PORT=4000
-NODE_ENV=development
-JWT_SECRET=changeme_jwt_secret
-JWT_ACCESS_EXPIRES=2h
-JWT_REFRESH_SECRET=changeme_refresh_secret
-JWT_REFRESH_EXPIRES=7d
-MONGO_URI=mongodb://root:password@mongo:27017/prestamosdb?authSource=admin
-REDIS_HOST=redis
-REDIS_PORT=6379
-SMTP_HOST=smtp.example.com
-SMTP_PORT=465
-SMTP_USER=user@example.com
-SMTP_PASS=pass
-FIREBASE_CREDENTIALS_PATH=/secrets/firebase.json
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080,http://127.0.0.1:9090
+Project structure expectations
+- src/config (db, redis, firebase)
+- src/models (mongoose schemas)
+- src/services (auth, loan, notification, user, equipment)
+- src/controllers (thin controllers)
+- src/routes (separate files)
+- src/middlewares (auth, role, validate, error)
+- src/utils (jwt helpers, date helpers)
+- src/index.ts (export app for tests + start server)
+- tests/unit and tests/integration with jest+supertest
 
-Scripts esperados en package.json:
-- dev, build, start, seed, test, lint, wait-for-db
+.env.example (must include)
+PORT, NODE_ENV, JWT_SECRET, JWT_ACCESS_EXPIRES, JWT_REFRESH_SECRET, JWT_REFRESH_EXPIRES,
+MONGO_URI, REDIS_HOST, REDIS_PORT, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, FIREBASE_CREDENTIALS_PATH, ALLOWED_ORIGINS
 
-Seeds iniciales (script debe crear):
-- Usuarios:
-  - admin@uaa.mx / password: AdminPass123! (role: admin)
-  - profesor@uaa.mx / password: Profesor123! (role: profesor)
-  - estudiante@uaa.mx / password: Estudiante123! (role: estudiante)
-- Equipment: al menos 5 equipos (laptops, proyector, microcontrolador)
-- Loans: 1 préstamo activo asignado a profesor o estudiante
+Deliverable requirements (Cursor output)
+- Give file list created and brief purpose per file.
+- Print .env.example content.
+- Provide exact commands to run locally and with docker-compose.
+- Provide example curl requests for login, reserve, refresh token, register fcmToken.
+- Include brief testing instructions and how to run tests.
 
-Tests obligatorios:
-- Unit tests: LoanService.createReservation (success, conflict, role limit)
-- Integration tests: auth login, equipment list (paginated), reserve flow
+Notes for the generator
+- Keep variable, function and file names consistent and idiomatic.
+- Comments in Spanish.
+- Avoid using Prisma; use Mongoose.
+- Export express app separately (module) to allow tests to import app without listening.
+- Keep code modular: services should not access req/res directly.
+- Use async/await and proper try/catch error forwarding to error middleware.
 
-Formato de respuestas y errores:
-- Código HTTP correcto (401 para no autorizado, 403 para forbidden, 400 para bad request, 409 para conflict en solapamiento)
-- Mensajes de error claros para el frontend
-
-Instrucciones para el frontend (ejemplos que el backend debe documentar en README):
-- Login:
-  - POST /api/auth/login { email, password } -> { success:true, data:{ token, refreshToken, user } }
-- Uso del token:
-  - Header `Authorization: Bearer <token>`
-- Refresh:
-  - POST /api/auth/refresh { refreshToken } -> returns new tokens
-- Envío de fcmToken (push):
-  - POST /api/notifications/register { fcmToken } (auth)
-
-Criterios de entrega:
-- Repo funcional con `docker-compose up --build`.
-- Tests ejecutan y pasan en CI.
-- README te dice exactamente cómo conectar el frontend (headers, endpoints ejemplo curl).
-- Swagger con los endpoints y ejemplos.
-
-Fin del contexto.
+Context final note:
+- The user will use Cursor to generate the code and will integrate with Flutter later. The database is present and seeded locally; CI uses GitHub Actions runner. Keep code ready to run both locally (using local Mongo or Atlas via .env) and inside Docker-compose (using service hostnames 'mongo' and 'redis').

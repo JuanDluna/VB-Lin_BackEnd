@@ -1,0 +1,120 @@
+name: 🔗 Integration Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: {}
+
+jobs:
+  integration-tests:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:6
+        ports:
+          - "27017:27017"
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:6-alpine
+        ports:
+          - "6379:6379"
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: 📥 Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: 🔨 Build project
+        run: npm run build
+
+      - name: ⚙️ Create test environment
+        run: |
+          cat > .env <<EOF
+          PORT=4000
+          NODE_ENV=test
+          JWT_SECRET=test_jwt_secret_for_integration
+          JWT_ACCESS_EXPIRES=1h
+          JWT_REFRESH_SECRET=test_refresh_secret_for_integration
+          JWT_REFRESH_EXPIRES=7d
+          MONGO_URI=mongodb://localhost:27017/VB-Lin_BackEnd_test
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          ALLOWED_ORIGINS=http://localhost:3000
+          EOF
+
+      - name: ⏳ Wait for MongoDB
+        run: |
+          echo "Waiting for MongoDB..."
+          for i in 1 2 3 4 5 6; do
+            if nc -z localhost 27017 2>/dev/null; then
+              echo "✅ MongoDB ready (attempt $i)"
+              break
+            fi
+            echo "⏳ Attempt $i failed, waiting 3s..."
+            sleep 3
+          done
+
+      - name: ⏳ Wait for Redis
+        run: |
+          echo "Waiting for Redis..."
+          for i in 1 2 3 4 5; do
+            if nc -z localhost 6379 2>/dev/null; then
+              echo "✅ Redis ready (attempt $i)"
+              break
+            fi
+            echo "⏳ Attempt $i failed, waiting 2s..."
+            sleep 2
+          done
+
+      - name: 🌱 Seed test database
+        run: npm run seed || echo "⚠️ Seed failed (continuing anyway)"
+        env:
+          MONGO_URI: mongodb://localhost:27017/VB-Lin_BackEnd_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          NODE_ENV: test
+
+      - name: 🔗 Run integration tests
+        run: npm test -- --testPathPattern=integration --coverage --coverageReporters=text --coverageReporters=lcov
+        env:
+          MONGO_URI: mongodb://localhost:27017/VB-Lin_BackEnd_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          NODE_ENV: test
+          JWT_SECRET: test_jwt_secret_for_integration
+          JWT_REFRESH_SECRET: test_refresh_secret_for_integration
+
+      - name: 📊 Upload coverage to artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-tests-coverage
+          path: coverage
+          retention-days: 7
+

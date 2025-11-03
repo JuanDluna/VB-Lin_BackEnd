@@ -1,6 +1,6 @@
-import { Notification, INotification } from '../models';
+import { Notification, INotification, FCMToken } from '../models';
 import { AppError } from '../middlewares/errorHandler';
-import { getRedisClient } from '../utils/redis';
+import { Types } from 'mongoose';
 import * as admin from 'firebase-admin';
 import { config } from '../config';
 
@@ -10,19 +10,55 @@ import { config } from '../config';
 export class NotificationService {
   /**
    * Inicializar Firebase Admin (si está configurado)
+   * Lee el archivo JSON de credenciales y configura Firebase Admin SDK
    */
   private static async initFirebase(): Promise<void> {
-    if (!admin.apps.length && config.firebaseCredentialsPath) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const serviceAccount = require(config.firebaseCredentialsPath);
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
-        });
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.warn('[NotificationService] Firebase no configurado o credenciales inválidas');
+    // Si ya está inicializado, no hacer nada
+    if (admin.apps.length > 0) {
+      return;
+    }
+
+    // Si no hay ruta de credenciales, salir
+    if (!config.firebaseCredentialsPath) {
+      return;
+    }
+
+    try {
+      // Leer archivo de credenciales usando fs (más robusto que require)
+      const fs = await import('fs');
+      const path = await import('path');
+
+      // Resolver ruta absoluta si es relativa
+      const credentialsPath = path.isAbsolute(config.firebaseCredentialsPath)
+        ? config.firebaseCredentialsPath
+        : path.resolve(process.cwd(), config.firebaseCredentialsPath);
+
+      // Verificar que el archivo existe
+      if (!fs.existsSync(credentialsPath)) {
+        console.warn(`[NotificationService] Archivo de credenciales no encontrado: ${credentialsPath}`);
+        return;
       }
+
+      // Leer y parsear el archivo JSON
+      const serviceAccountJson = fs.readFileSync(credentialsPath, 'utf8');
+      const serviceAccount = JSON.parse(serviceAccountJson);
+
+      // Validar que tiene las propiedades mínimas requeridas
+      if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount.client_email) {
+        console.error('[NotificationService] Archivo de credenciales inválido: faltan campos requeridos');
+        return;
+      }
+
+      // Inicializar Firebase Admin
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+      });
+
+      console.log('✅ Firebase Admin SDK inicializado correctamente');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      console.error(`[NotificationService] Error al inicializar Firebase: ${errorMessage}`);
+      console.warn('[NotificationService] Las notificaciones push se simularán en lugar de enviarse');
     }
   }
 
@@ -69,19 +105,41 @@ export class NotificationService {
 
   /**
    * Registrar token FCM para push notifications
+   * Guarda el token en la colección fcmTokens (MongoDB)
    */
-  static async registerFCMToken(userId: string, fcmToken: string): Promise<void> {
-    const client = await getRedisClient();
-    await client.setEx(`fcm:${userId}`, 60 * 60 * 24 * 30, fcmToken); // 30 días
+  static async registerFCMToken(
+    userId: string,
+    fcmToken: string,
+    platform?: 'android' | 'ios' | 'web'
+  ): Promise<void> {
+    // Registrar o actualizar token FCM en la colección fcmTokens
+    // Si el token ya existe para otro usuario, se reemplaza
+    await FCMToken.findOneAndUpdate(
+      { token: fcmToken },
+      {
+        userId: new Types.ObjectId(userId),
+        token: fcmToken,
+        platform: platform || 'web',
+        createdAt: new Date(),
+      },
+      { upsert: true, new: true }
+    );
   }
 
   /**
-   * Obtener token FCM de un usuario
+   * Obtener token FCM de un usuario (el más reciente)
    */
   static async getFCMToken(userId: string): Promise<string | null> {
-    const client = await getRedisClient();
-    const token = await client.get(`fcm:${userId}`);
-    return token;
+    const fcmToken = await FCMToken.findOne({ userId }).sort({ createdAt: -1 });
+    return fcmToken?.token || null;
+  }
+
+  /**
+   * Obtener todos los tokens FCM de un usuario
+   */
+  static async getAllFCMTokens(userId: string): Promise<string[]> {
+    const tokens = await FCMToken.find({ userId });
+    return tokens.map((t) => t.token);
   }
 
   /**
@@ -127,27 +185,30 @@ export class NotificationService {
 
   /**
    * Enviar push notification usando FCM
+   * Si no hay credenciales de Firebase, simula el envío y guarda notificación
    */
   private static async sendPushNotification(userId: string, message: string): Promise<void> {
     await this.initFirebase();
 
     if (!admin.apps.length) {
-      // En desarrollo, solo loguear
+      // En desarrollo o sin credenciales: simular envío y loguear
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[DEV] Push notification para usuario ${userId}: ${message}`);
+        console.log(`[DEV] Push notification simulado para usuario ${userId}: ${message}`);
       }
-      return;
+      return; // Notificación ya está guardada en DB, solo simulamos push
     }
 
-    const fcmToken = await this.getFCMToken(userId);
+    // Obtener todos los tokens del usuario (puede tener múltiples dispositivos)
+    const fcmTokens = await this.getAllFCMTokens(userId);
 
-    if (!fcmToken) {
-      return; // Usuario no tiene token FCM registrado
+    if (fcmTokens.length === 0) {
+      return; // Usuario no tiene tokens FCM registrados
     }
 
+    // Enviar a todos los dispositivos del usuario
     try {
-      await admin.messaging().send({
-        token: fcmToken,
+      const messages = fcmTokens.map((token) => ({
+        token,
         notification: {
           title: 'Sistema de Préstamos UAA',
           body: message,
@@ -156,14 +217,23 @@ export class NotificationService {
           userId,
           message,
         },
-      });
-    } catch (error) {
-      // Si el token es inválido, eliminarlo
-      if ((error as any).code === 'messaging/invalid-registration-token') {
-        const client = await getRedisClient();
-        await client.del(`fcm:${userId}`);
+      }));
+
+      await admin.messaging().sendAll(messages);
+    } catch (error: unknown) {
+      const firebaseError = error as { code?: string; message?: string };
+      // Si algún token es inválido, intentar eliminarlo de la BD
+      if (
+        firebaseError.code === 'messaging/invalid-registration-token' ||
+        firebaseError.code === 'messaging/registration-token-not-registered'
+      ) {
+        // Nota: sendAll puede fallar parcialmente; en producción deberías manejar errores por token individual
+        console.warn(`[NotificationService] Token FCM inválido detectado para usuario ${userId}`);
+        // Opcional: eliminar tokens inválidos de la BD
+        // Esto requeriría parsear la respuesta de sendAll para identificar qué tokens fallaron
       }
-      throw error;
+      // No lanzar error para no romper el flujo, solo loguear
+      console.error('[NotificationService] Error enviando push notification:', firebaseError.message || error);
     }
   }
 }

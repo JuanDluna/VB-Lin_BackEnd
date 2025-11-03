@@ -5,4 +5,5 @@ export { User, IUser } from './User';
 export { Equipment, IEquipment } from './Equipment';
 export { Loan, ILoan } from './Loan';
 export { Notification, INotification } from './Notification';
+export { FCMToken, IFCMToken } from './FCMToken';
 

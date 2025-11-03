@@ -16,8 +16,8 @@ export const config = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'changeme_refresh_secret',
   jwtRefreshExpires: process.env.JWT_REFRESH_EXPIRES || '7d',
 
-  // MongoDB
-  mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27017/prestamosdb',
+  // MongoDB - Nombre de BD: VB-Lin_BackEnd
+  mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27017/VB-Lin_BackEnd',
 
   // Redis
   redisHost: process.env.REDIS_HOST || 'localhost',

@@ -1,0 +1,96 @@
+name: 📊 Test Coverage Report
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: {}
+
+jobs:
+  coverage:
+    name: 📊 Generate Coverage Report
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:6
+        ports:
+          - "27017:27017"
+      redis:
+        image: redis:6-alpine
+        ports:
+          - "6379:6379"
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: 📥 Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: 🔨 Build project
+        run: npm run build
+
+      - name: ⚙️ Setup test environment
+        run: |
+          cat > .env <<EOF
+          PORT=4000
+          NODE_ENV=test
+          JWT_SECRET=test_jwt_secret
+          JWT_ACCESS_EXPIRES=1h
+          JWT_REFRESH_SECRET=test_refresh_secret
+          JWT_REFRESH_EXPIRES=7d
+          MONGO_URI=mongodb://localhost:27017/VB-Lin_BackEnd_test
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          ALLOWED_ORIGINS=http://localhost:3000
+          EOF
+
+      - name: ⏳ Wait for services
+        run: |
+          for i in 1 2 3 4 5; do
+            if nc -z localhost 27017 && nc -z localhost 6379; then break; fi
+            sleep 2
+          done
+
+      - name: 🌱 Seed database
+        run: npm run seed || true
+        env:
+          MONGO_URI: mongodb://localhost:27017/VB-Lin_BackEnd_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: 🧪 Run all tests with coverage
+        run: npm run test:coverage
+        env:
+          MONGO_URI: mongodb://localhost:27017/VB-Lin_BackEnd_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          NODE_ENV: test
+
+      - name: 📊 Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage
+          retention-days: 30
+
+      - name: 📈 Coverage Summary
+        run: |
+          echo "📊 Coverage Report Generated"
+          if [ -f coverage/coverage-summary.json ]; then
+            echo "✅ Coverage summary available in artifacts"
+          fi
+

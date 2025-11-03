@@ -37,7 +37,7 @@ export class ReportController {
   /**
    * GET /api/reports/equipment-stats
    */
-  static async getEquipmentStats(req: Request, res: Response, next: NextFunction): Promise<void> {
+  static async getEquipmentStats(_req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const stats = await ReportService.getEquipmentStats();
 
@@ -53,7 +53,7 @@ export class ReportController {
   /**
    * GET /api/reports/user-activity
    */
-  static async getUserActivity(req: Request, res: Response, next: NextFunction): Promise<void> {
+  static async getUserActivity(_req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const report = await ReportService.getUserActivityReport();
 
@@ -69,7 +69,7 @@ export class ReportController {
   /**
    * GET /api/reports/overdue
    */
-  static async getOverdue(req: Request, res: Response, next: NextFunction): Promise<void> {
+  static async getOverdue(_req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const report = await ReportService.getOverdueReport();
 

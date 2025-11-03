@@ -1,0 +1,40 @@
+name: 🔍 TypeScript Type Checking
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: {}
+
+jobs:
+  type-check:
+    name: TypeScript Type Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: 📥 Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: 🔍 TypeScript Type Check
+        run: npx tsc --noEmit --pretty
+
+      - name: ✅ Type Check Summary
+        run: |
+          echo "✅ TypeScript type checking completed successfully"
+          echo "📝 All types are correct and there are no type errors"
+

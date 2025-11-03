@@ -9,6 +9,33 @@ import { AuthRequest } from '../middlewares/auth';
  */
 export class AuthController {
   /**
+   * POST /api/auth/register
+   */
+  static async register(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          error: errors.array()[0].msg,
+        });
+        return;
+      }
+
+      const { email, password, firstName, lastName } = req.body;
+
+      const result = await AuthService.register(email, password, firstName, lastName);
+
+      res.status(201).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * POST /api/auth/login
    */
   static async login(req: Request, res: Response, next: NextFunction): Promise<void> {

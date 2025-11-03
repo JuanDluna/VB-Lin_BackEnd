@@ -40,7 +40,7 @@ jobs:
           PORT=4000
           NODE_ENV=test
           JWT_SECRET=test_jwt_secret
-          MONGO_URI=mongodb://mongodb:27017/prestamosdb
+          MONGO_URI=mongodb://mongodb:27017/VB-Lin_BackEnd
           REDIS_HOST=redis
           REDIS_PORT=6379
           EOF
@@ -66,7 +66,7 @@ jobs:
         run: |
           if npm run | grep -q " seed"; then npm run seed || echo "seed failed (ignored)"; else echo "no seed script"; fi
         env:
-          MONGO_URI: mongodb://mongodb:27017/prestamosdb
+          MONGO_URI: mongodb://mongodb:27017/VB-Lin_BackEnd
           REDIS_HOST: redis
           REDIS_PORT: 6379
           NODE_ENV: test
@@ -75,7 +75,7 @@ jobs:
         run: |
           if npm run | grep -q " test"; then npm test -- --coverage || echo "tests failed (ignored)"; else echo "no test script"; fi
         env:
-          MONGO_URI: mongodb://mongodb:27017/prestamosdb
+          MONGO_URI: mongodb://mongodb:27017/VB-Lin_BackEnd
           REDIS_HOST: redis
           REDIS_PORT: 6379
           NODE_ENV: test

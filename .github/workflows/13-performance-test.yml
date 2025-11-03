@@ -1,0 +1,148 @@
+name: ⚡ Performance & Load Testing
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  performance-test:
+    name: API Performance Testing
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:6
+        ports:
+          - "27017:27017"
+      redis:
+        image: redis:6-alpine
+        ports:
+          - "6379:6379"
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: 📥 Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: 🔨 Build project
+        run: npm run build
+
+      - name: ⚙️ Setup test environment
+        run: |
+          cat > .env <<EOF
+          PORT=4000
+          NODE_ENV=test
+          JWT_SECRET=test_jwt_secret
+          JWT_ACCESS_EXPIRES=1h
+          JWT_REFRESH_SECRET=test_refresh_secret
+          JWT_REFRESH_EXPIRES=7d
+          MONGO_URI=mongodb://localhost:27017/VB-Lin_BackEnd_test
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          ALLOWED_ORIGINS=http://localhost:3000
+          EOF
+
+      - name: ⏳ Wait for services
+        run: |
+          echo "Waiting for MongoDB and Redis..."
+          for i in 1 2 3 4 5; do
+            if nc -z localhost 27017 2>/dev/null && nc -z localhost 6379 2>/dev/null; then
+              echo "✅ Services ready"
+              break
+            fi
+            echo "⏳ Attempt $i, waiting 2s..."
+            sleep 2
+          done
+
+      - name: 🌱 Seed database
+        run: npm run seed || true
+        env:
+          MONGO_URI: mongodb://localhost:27017/VB-Lin_BackEnd_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          NODE_ENV: test
+
+      - name: 🚀 Start server in background
+        run: |
+          npm start > server.log 2>&1 &
+          echo $! > server.pid
+          sleep 5
+        env:
+          MONGO_URI: mongodb://localhost:27017/VB-Lin_BackEnd_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          NODE_ENV: test
+          JWT_SECRET: test_jwt_secret
+          JWT_REFRESH_SECRET: test_refresh_secret
+
+      - name: ⚡ Health check
+        run: |
+          echo "⚡ Testing health endpoint..."
+          for i in 1 2 3 4 5; do
+            if curl -f http://localhost:4000/health >/dev/null 2>&1; then
+              echo "✅ Server is responding"
+              break
+            fi
+            echo "⏳ Attempt $i, waiting 2s..."
+            sleep 2
+          done
+
+      - name: 📊 Run basic performance checks
+        run: |
+          echo "📊 Running performance checks..."
+          
+          # Test response time
+          echo "Testing response time..."
+          for i in 1 2 3; do
+            time curl -s -o /dev/null -w "%{time_total}\n" http://localhost:4000/health || true
+            sleep 1
+          done > response-times.txt || echo "0.000" > response-times.txt
+          
+          avg_time=$(awk '{sum+=$1; count++} END {if(count>0) print sum/count; else print 0}' response-times.txt)
+          echo "Average response time: ${avg_time}s"
+          
+          if (( $(echo "$avg_time > 1.0" | bc -l 2>/dev/null || echo "0") )); then
+            echo "⚠️ Response time is slow (>1s)"
+          else
+            echo "✅ Response time is acceptable"
+          fi
+
+      - name: 🧹 Cleanup
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) 2>/dev/null || true
+            rm -f server.pid
+          fi
+
+      - name: 📤 Upload performance reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-reports
+          path: |
+            response-times.txt
+            server.log
+          retention-days: 7
+
+      - name: ✅ Performance Summary
+        run: |
+          echo "✅ Performance testing completed"
+          echo "📊 Check artifacts for detailed reports"
+

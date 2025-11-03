@@ -16,7 +16,7 @@ services:
       - JWT_ACCESS_EXPIRES=${JWT_ACCESS_EXPIRES:-2h}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-changeme_refresh_secret}
       - JWT_REFRESH_EXPIRES=${JWT_REFRESH_EXPIRES:-7d}
-      - MONGO_URI=mongodb://root:password@mongo:27017/prestamosdb?authSource=admin
+      - MONGO_URI=mongodb://mongo:27017/VB-Lin_BackEnd
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - SMTP_HOST=${SMTP_HOST:-smtp.example.com}
@@ -25,6 +25,9 @@ services:
       - SMTP_PASS=${SMTP_PASS:-pass}
       - FIREBASE_CREDENTIALS_PATH=${FIREBASE_CREDENTIALS_PATH:-/secrets/firebase.json}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080,http://127.0.0.1:9090}
+    # Para desarrollo: usar tsx watch (hot-reload)
+    # Para producción: comentar esta línea y usar CMD del Dockerfile
+    command: npm run dev
     depends_on:
       mongo:
         condition: service_healthy
@@ -32,6 +35,9 @@ services:
         condition: service_started
     volumes:
       - ./secrets:/secrets:ro
+      # Montar código fuente completo para hot-reload en desarrollo
+      - ./:/usr/src/app
+      - /usr/src/app/node_modules  # Excluir node_modules del volumen
     restart: unless-stopped
     networks:
       - vb-lin-network
@@ -43,16 +49,15 @@ services:
     ports:
       - '27017:27017'
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=password
-      - MONGO_INITDB_DATABASE=prestamosdb
+      - MONGO_INITDB_DATABASE=VB-Lin_BackEnd
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     restart: unless-stopped
     networks:
       - vb-lin-network

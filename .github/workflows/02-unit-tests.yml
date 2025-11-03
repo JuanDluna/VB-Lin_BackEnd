@@ -1,0 +1,55 @@
+name: 🧪 Unit Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: {}
+
+jobs:
+  unit-tests:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: 📥 Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: 🔨 Build project
+        run: npm run build
+
+      - name: 🧪 Run unit tests
+        run: npm test -- --testPathPattern=unit --coverage --coverageReporters=text --coverageReporters=lcov
+        env:
+          NODE_ENV: test
+
+      - name: 📊 Upload coverage to artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-tests-coverage
+          path: coverage
+          retention-days: 7
+
+      - name: 📈 Coverage Summary
+        run: |
+          if [ -f coverage/lcov.info ]; then
+            echo "📊 Coverage report generated"
+          else
+            echo "⚠️ No coverage report found"
+          fi
+

@@ -16,11 +16,12 @@ const seed = async (): Promise<void> => {
     // Conectar a MongoDB
     await connectMongoDB();
 
-    // Limpiar colecciones (opcional, comentar si quieres conservar datos)
+    // Limpiar colecciones (opcional, comentar si quieres conservar datos existentes)
     console.log('🗑️  Limpiando colecciones...');
     await User.deleteMany({});
     await Equipment.deleteMany({});
     await Loan.deleteMany({});
+    // Nota: No limpiar notifications para mantener historial
 
     // Crear usuarios
     console.log('👤 Creando usuarios...');

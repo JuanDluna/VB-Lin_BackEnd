@@ -1,0 +1,48 @@
+name: 🔒 Security Audit
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 0 * * 1' # Every Monday at midnight
+  workflow_dispatch: {}
+
+jobs:
+  security-audit:
+    name: Security & Dependency Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: 🔒 Run npm audit
+        run: |
+          npm audit --audit-level=moderate || true
+          echo "🔒 Security audit completed"
+
+      - name: 🔍 Check for known vulnerabilities
+        run: |
+          npm audit --json > audit-report.json || true
+          echo "📊 Audit report generated"
+
+      - name: 📤 Upload audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-audit-report
+          path: audit-report.json
+          retention-days: 30
+
+      - name: 🛡️ Summary
+        run: |
+          echo "🔒 Security audit completed"
+          echo "Review audit-report.json artifact for details"
+

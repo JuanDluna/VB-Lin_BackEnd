@@ -1,0 +1,98 @@
+name: 🔄 Multi-Node Version Testing
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  test-multi-node:
+    name: Test on Node.js ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['18', '20']
+      fail-fast: false
+
+    services:
+      mongodb:
+        image: mongo:6
+        ports:
+          - "27017:27017"
+      redis:
+        image: redis:6-alpine
+        ports:
+          - "6379:6379"
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: 📥 Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: 🔨 Build project
+        run: npm run build
+
+      - name: ⚙️ Setup test environment
+        run: |
+          cat > .env <<EOF
+          PORT=4000
+          NODE_ENV=test
+          JWT_SECRET=test_jwt_secret
+          JWT_ACCESS_EXPIRES=1h
+          JWT_REFRESH_SECRET=test_refresh_secret
+          JWT_REFRESH_EXPIRES=7d
+          MONGO_URI=mongodb://localhost:27017/VB-Lin_BackEnd_test
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          ALLOWED_ORIGINS=http://localhost:3000
+          EOF
+
+      - name: ⏳ Wait for services
+        run: |
+          echo "Waiting for MongoDB and Redis..."
+          for i in 1 2 3 4 5; do
+            if nc -z localhost 27017 2>/dev/null && nc -z localhost 6379 2>/dev/null; then
+              echo "✅ Services ready"
+              break
+            fi
+            echo "⏳ Attempt $i, waiting 2s..."
+            sleep 2
+          done
+
+      - name: 🌱 Seed database
+        run: npm run seed || true
+        env:
+          MONGO_URI: mongodb://localhost:27017/VB-Lin_BackEnd_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          NODE_ENV: test
+
+      - name: 🧪 Run tests
+        run: npm test
+        env:
+          MONGO_URI: mongodb://localhost:27017/VB-Lin_BackEnd_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          NODE_ENV: test
+          JWT_SECRET: test_jwt_secret
+          JWT_REFRESH_SECRET: test_refresh_secret
+
+      - name: ✅ Node ${{ matrix.node-version }} Summary
+        run: |
+          echo "✅ All tests passed on Node.js ${{ matrix.node-version }}"
+

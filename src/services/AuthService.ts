@@ -17,6 +17,64 @@ import nodemailer from 'nodemailer';
  */
 export class AuthService {
   /**
+   * Registro de nuevo usuario (rol 'estudiante' por defecto)
+   */
+  static async register(
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string
+  ): Promise<{
+    token: string;
+    refreshToken: string;
+    user: Partial<IUser>;
+  }> {
+    // Verificar si el email ya existe
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+
+    if (existingUser) {
+      throw new AppError('El email ya está registrado', 409);
+    }
+
+    // Hashear contraseña
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Crear usuario con rol 'estudiante' por defecto
+    const user = new User({
+      email: email.toLowerCase(),
+      passwordHash,
+      firstName,
+      lastName,
+      role: 'estudiante',
+      active: true,
+      createdAt: new Date(),
+      lastAccess: new Date(),
+    });
+
+    await user.save();
+
+    // Generar tokens
+    const payload = {
+      userId: user._id.toString(),
+      email: user.email,
+      role: user.role,
+    };
+
+    const token = generateAccessToken(payload);
+    const refreshToken = generateRefreshToken(payload);
+
+    // Guardar refresh token en Redis
+    const expiresInSeconds = getExpirationInSeconds(config.jwtRefreshExpires);
+    await saveRefreshToken(user._id.toString(), refreshToken, expiresInSeconds);
+
+    return {
+      token,
+      refreshToken,
+      user: user.toJSON(),
+    };
+  }
+
+  /**
    * Login de usuario
    */
   static async login(email: string, password: string): Promise<{
@@ -146,8 +204,8 @@ export class AuthService {
 
     // Guardar token en Redis
     const { getRedisClient } = await import('../utils/redis');
-    const client = await getRedisClient();
-    await client.setEx(
+    const client = getRedisClient();
+    await client.setex(
       `reset:${user._id.toString()}:${resetToken}`,
       3600,
       resetTokenExpiry.toISOString()
@@ -165,10 +223,27 @@ export class AuthService {
    * Resetear contraseña usando token
    */
   static async resetPassword(token: string, newPassword: string): Promise<void> {
-    // Buscar token en Redis
+    // Buscar token en Redis usando scanStream (más eficiente que keys)
     const { getRedisClient } = await import('../utils/redis');
-    const client = await getRedisClient();
-    const keys = await client.keys(`reset:*:${token}`);
+    const client = getRedisClient();
+    const pattern = `reset:*:${token}`;
+    const keys: string[] = [];
+    
+    // Escanear Redis usando scanStream para mejor rendimiento
+    const stream = client.scanStream({
+      match: pattern,
+      count: 100,
+    });
+    
+    stream.on('data', (resultKeys: string[]) => {
+      keys.push(...resultKeys);
+    });
+    
+    await new Promise<void>((resolve) => {
+      stream.on('end', () => {
+        resolve();
+      });
+    });
 
     if (keys.length === 0) {
       throw new AppError('Token de recuperación inválido o expirado', 400);

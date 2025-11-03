@@ -64,33 +64,6 @@ export class UserController {
   }
 
   /**
-   * POST /api/users/register
-   */
-  static async register(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        res.status(400).json({
-          success: false,
-          error: errors.array()[0].msg,
-        });
-        return;
-      }
-
-      const { email, password, firstName, lastName } = req.body;
-
-      const user = await UserService.registerUser(email, password, firstName, lastName);
-
-      res.status(201).json({
-        success: true,
-        data: user.toJSON(),
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  /**
    * PUT /api/users/:id
    */
   static async updateUser(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {

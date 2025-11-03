@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { UserController } from '../controllers/UserController';
 import {
-  validateRegister,
   validateUpdateUser,
   validatePagination,
   validateMongoId,
@@ -39,15 +38,8 @@ router.get(
   UserController.getUserById
 );
 
-/**
- * @route POST /api/users/register
- * @desc Registrar nuevo usuario
- * @access Public
- */
-router.post('/register', apiLimiter, validateRegister, UserController.register);
-
-/**
- * @route PUT /api/users/:id
+  /**
+   * @route PUT /api/users/:id
  * @desc Actualizar usuario
  * @access Private (propio o admin)
  */

@@ -1,0 +1,74 @@
+name: 📊 Code Complexity Analysis
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: {}
+
+jobs:
+  complexity:
+    name: Code Complexity & Quality Metrics
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: 📥 Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: 📊 Install complexity tools
+        run: |
+          npm install --save-dev --no-audit --no-fund \
+            complexity-report \
+            || echo "⚠️ Complexity tools installation failed (optional)"
+
+      - name: 🔨 Build project
+        run: npm run build || echo "⚠️ Build failed (continuing for analysis)"
+
+      - name: 📈 Generate complexity report
+        run: |
+          if command -v cr >/dev/null 2>&1; then
+            echo "📊 Running complexity analysis..."
+            cr src --format json > complexity-report.json 2>&1 || true
+          else
+            echo "⚠️ Complexity tools not available, skipping..."
+            echo '{"complexity": "not_available"}' > complexity-report.json
+          fi
+
+      - name: 📏 Check file sizes
+        run: |
+          echo "📏 Large Files (>500 lines):"
+          find src -name "*.ts" -type f | while read file; do
+            lines=$(wc -l < "$file" 2>/dev/null || echo "0")
+            if [ "$lines" -gt 500 ]; then
+              echo "  ⚠️ $file: $lines lines"
+            fi
+          done || echo "📏 File size check completed"
+
+      - name: 📊 Upload complexity report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: complexity-report
+          path: complexity-report.json
+          retention-days: 7
+
+      - name: ✅ Summary
+        run: |
+          echo "✅ Code complexity analysis completed"
+          echo "📊 Check artifacts for detailed reports"
+

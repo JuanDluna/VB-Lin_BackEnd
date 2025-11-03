@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { AuthController } from '../controllers/AuthController';
 import {
   validateLogin,
+  validateRegister,
   validateRefreshToken,
   validateLogout,
   validateForgotPassword,
@@ -11,6 +12,13 @@ import { authMiddleware } from '../middlewares/auth';
 import { authLimiter, passwordResetLimiter } from '../middlewares/rateLimiter';
 
 const router = Router();
+
+/**
+ * @route POST /api/auth/register
+ * @desc Registrar nuevo usuario (rol 'estudiante' por defecto)
+ * @access Public
+ */
+router.post('/register', authLimiter, validateRegister, AuthController.register);
 
 /**
  * @route POST /api/auth/login

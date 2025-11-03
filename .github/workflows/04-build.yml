@@ -1,0 +1,57 @@
+name: 🏗️ Build Verification
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: Build & Verify
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: ['18', '20']
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: 📥 Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: 🔨 Build TypeScript
+        run: npm run build
+
+      - name: ✅ Verify build output
+        run: |
+          if [ -d "dist" ] && [ -f "dist/index.js" ]; then
+            echo "✅ Build successful - dist/index.js exists"
+            echo "📦 Build size:"
+            du -sh dist
+          else
+            echo "❌ Build failed - dist/index.js not found"
+            exit 1
+          fi
+
+      - name: 🔍 Check for source maps
+        run: |
+          if ls dist/**/*.map 1> /dev/null 2>&1; then
+            echo "✅ Source maps generated"
+          else
+            echo "⚠️ No source maps found"
+          fi
+
