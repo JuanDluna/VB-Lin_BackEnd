@@ -57,13 +57,31 @@ export const createApp = (): Application => {
   const app = express();
 
   // Middlewares de seguridad
-  app.use(helmet());
+  // Configurar Helmet para no bloquear CORS en desarrollo
   app.use(
-    cors({
-      origin: config.allowedOrigins,
-      credentials: true,
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      crossOriginEmbedderPolicy: false, // Desactivar en desarrollo para evitar problemas con CORS
     })
   );
+  
+  // CORS debe ir después de Helmet, pero antes del rate limiter
+  app.use(
+    cors({
+      // En desarrollo, permitir todos los orígenes para facilitar desarrollo con Flutter/móviles
+      origin: config.nodeEnv === 'development' 
+        ? true  // Permite todos los orígenes en desarrollo
+        : config.allowedOrigins,  // En producción, usar lista específica
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      preflightContinue: false,
+      optionsSuccessStatus: 204,
+    })
+  );
+
+  // Manejar peticiones OPTIONS explícitamente (preflight)
+  app.options('*', cors());
 
   // Body parser
   app.use(express.json());
@@ -76,7 +94,7 @@ export const createApp = (): Application => {
     app.use(morgan('combined'));
   }
 
-  // Rate limiting general
+  // Rate limiting general (después de CORS para no bloquear preflight)
   app.use(apiLimiter);
 
   // Swagger UI

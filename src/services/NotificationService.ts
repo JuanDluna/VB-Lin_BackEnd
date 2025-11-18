@@ -219,7 +219,7 @@ export class NotificationService {
         },
       }));
 
-      await admin.messaging().sendAll(messages);
+      await admin.messaging().sendEach(messages);
     } catch (error: unknown) {
       const firebaseError = error as { code?: string; message?: string };
       // Si algún token es inválido, intentar eliminarlo de la BD
@@ -227,10 +227,10 @@ export class NotificationService {
         firebaseError.code === 'messaging/invalid-registration-token' ||
         firebaseError.code === 'messaging/registration-token-not-registered'
       ) {
-        // Nota: sendAll puede fallar parcialmente; en producción deberías manejar errores por token individual
+        // Nota: sendEach puede fallar parcialmente; en producción deberías manejar errores por token individual
         console.warn(`[NotificationService] Token FCM inválido detectado para usuario ${userId}`);
         // Opcional: eliminar tokens inválidos de la BD
-        // Esto requeriría parsear la respuesta de sendAll para identificar qué tokens fallaron
+        // Esto requeriría parsear la respuesta de sendEach para identificar qué tokens fallaron
       }
       // No lanzar error para no romper el flujo, solo loguear
       console.error('[NotificationService] Error enviando push notification:', firebaseError.message || error);

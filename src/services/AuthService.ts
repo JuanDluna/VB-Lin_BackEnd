@@ -25,6 +25,9 @@ export class AuthService {
     firstName: string,
     lastName: string
   ): Promise<{
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
     token: string;
     refreshToken: string;
     user: Partial<IUser>;
@@ -63,14 +66,30 @@ export class AuthService {
     const token = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
 
+    // Validar que los tokens se generaron correctamente
+    if (!token || !refreshToken || typeof token !== 'string' || typeof refreshToken !== 'string') {
+      throw new AppError('Error al generar tokens de autenticación', 500);
+    }
+
     // Guardar refresh token en Redis
     const expiresInSeconds = getExpirationInSeconds(config.jwtRefreshExpires);
     await saveRefreshToken(user._id.toString(), refreshToken, expiresInSeconds);
 
+    // Obtener datos del usuario sin passwordHash
+    const userData = user.toJSON();
+
+    // Calcular expires_in en segundos para el access token
+    const accessTokenExpiresIn = getExpirationInSeconds(config.jwtAccessExpires);
+
     return {
-      token,
-      refreshToken,
-      user: user.toJSON(),
+      // Compatibilidad con Flutter: usar access_token y refresh_token
+      access_token: token,
+      refresh_token: refreshToken,
+      expires_in: accessTokenExpiresIn,
+      // Mantener nombres originales para compatibilidad con otros clientes
+      token: token,
+      refreshToken: refreshToken,
+      user: userData,
     };
   }
 
@@ -78,6 +97,9 @@ export class AuthService {
    * Login de usuario
    */
   static async login(email: string, password: string): Promise<{
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
     token: string;
     refreshToken: string;
     user: Partial<IUser>;
@@ -108,14 +130,30 @@ export class AuthService {
     const token = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
 
+    // Validar que los tokens se generaron correctamente
+    if (!token || !refreshToken || typeof token !== 'string' || typeof refreshToken !== 'string') {
+      throw new AppError('Error al generar tokens de autenticación', 500);
+    }
+
     // Guardar refresh token en Redis
     const expiresInSeconds = getExpirationInSeconds(config.jwtRefreshExpires);
     await saveRefreshToken(user._id.toString(), refreshToken, expiresInSeconds);
 
+    // Obtener datos del usuario sin passwordHash
+    const userData = user.toJSON();
+
+    // Calcular expires_in en segundos para el access token
+    const accessTokenExpiresIn = getExpirationInSeconds(config.jwtAccessExpires);
+
     return {
-      token,
-      refreshToken,
-      user: user.toJSON(),
+      // Compatibilidad con Flutter: usar access_token y refresh_token
+      access_token: token,
+      refresh_token: refreshToken,
+      expires_in: accessTokenExpiresIn,
+      // Mantener nombres originales para compatibilidad con otros clientes
+      token: token,
+      refreshToken: refreshToken,
+      user: userData,
     };
   }
 

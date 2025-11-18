@@ -41,8 +41,11 @@ export class EquipmentService {
       Equipment.countDocuments(filter),
     ]);
 
+    // Serializar equipos a JSON correctamente
+    const equipmentList = equipment.map((eq) => eq.toJSON());
+
     return {
-      data: equipment,
+      data: equipmentList,
       pagination: {
         page,
         limit,

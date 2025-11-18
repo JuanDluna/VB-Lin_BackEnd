@@ -17,12 +17,13 @@ const startServer = async (): Promise<void> => {
     // Crear aplicación Express
     const app = createApp();
 
-    // Iniciar servidor
-    const server = app.listen(config.port, () => {
+    // Iniciar servidor - escuchar en todas las interfaces (0.0.0.0) para acceso desde red local
+    const server = app.listen(config.port, '0.0.0.0', () => {
       console.log(`🚀 Servidor corriendo en http://localhost:${config.port}`);
       console.log(`📚 Documentación Swagger: http://localhost:${config.port}/api-docs`);
       console.log(`🏥 Health check: http://localhost:${config.port}/health`);
       console.log(`🌍 Entorno: ${config.nodeEnv}`);
+      console.log(`🌐 Accesible desde la red local en: http://192.168.56.1:${config.port}`);
     });
 
     // Iniciar cron jobs
