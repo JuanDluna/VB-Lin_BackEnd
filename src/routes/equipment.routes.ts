@@ -34,13 +34,13 @@ router.get(
 /**
  * @route POST /api/equipment
  * @desc Crear nuevo equipo
- * @access Admin
+ * @access Admin, Profesor
  */
 router.post(
   '/',
   apiLimiter,
   authMiddleware,
-  roleMiddleware(['admin']),
+  roleMiddleware(['admin', 'profesor']),
   validateEquipment,
   EquipmentController.createEquipment
 );
@@ -48,13 +48,13 @@ router.post(
 /**
  * @route PUT /api/equipment/:id
  * @desc Actualizar equipo
- * @access Admin
+ * @access Admin, Profesor
  */
 router.put(
   '/:id',
   apiLimiter,
   authMiddleware,
-  roleMiddleware(['admin']),
+  roleMiddleware(['admin', 'profesor']),
   validateMongoId('id'),
   validateUpdateEquipment,
   EquipmentController.updateEquipment
@@ -63,13 +63,13 @@ router.put(
 /**
  * @route DELETE /api/equipment/:id
  * @desc Eliminar equipo
- * @access Admin
+ * @access Admin, Profesor
  */
 router.delete(
   '/:id',
   apiLimiter,
   authMiddleware,
-  roleMiddleware(['admin']),
+  roleMiddleware(['admin', 'profesor']),
   validateMongoId('id'),
   EquipmentController.deleteEquipment
 );
