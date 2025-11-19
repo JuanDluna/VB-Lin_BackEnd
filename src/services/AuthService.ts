@@ -23,7 +23,8 @@ export class AuthService {
     email: string,
     password: string,
     firstName: string,
-    lastName: string
+    lastName: string,
+    role?: 'estudiante' | 'profesor' | 'admin'
   ): Promise<{
     access_token: string;
     refresh_token: string;
@@ -42,13 +43,17 @@ export class AuthService {
     // Hashear contraseña
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Crear usuario con rol 'estudiante' por defecto
+    // Validar rol (solo admin puede crear otros admins, pero por ahora permitimos profesor y estudiante)
+    // Por seguridad, no permitir crear admins desde el registro público
+    const userRole = role && role !== 'admin' ? role : 'estudiante';
+
+    // Crear usuario con el rol especificado o 'estudiante' por defecto
     const user = new User({
       email: email.toLowerCase(),
       passwordHash,
       firstName,
       lastName,
-      role: 'estudiante',
+      role: userRole,
       active: true,
       createdAt: new Date(),
       lastAccess: new Date(),

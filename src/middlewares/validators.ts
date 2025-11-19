@@ -49,6 +49,10 @@ export const validateRegister = [
     .withMessage('La contraseña debe contener al menos un número'),
   body('firstName').trim().notEmpty().withMessage('El nombre es requerido'),
   body('lastName').trim().notEmpty().withMessage('El apellido es requerido'),
+  body('role')
+    .optional()
+    .isIn(['estudiante', 'profesor', 'admin'])
+    .withMessage('Rol inválido. Debe ser: estudiante, profesor o admin'),
 ];
 
 export const validateUpdateUser = [

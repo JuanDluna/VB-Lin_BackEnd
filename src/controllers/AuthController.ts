@@ -22,9 +22,9 @@ export class AuthController {
         return;
       }
 
-      const { email, password, firstName, lastName } = req.body;
+      const { email, password, firstName, lastName, role } = req.body;
 
-      const result = await AuthService.register(email, password, firstName, lastName);
+      const result = await AuthService.register(email, password, firstName, lastName, role);
 
       res.status(201).json({
         success: true,
