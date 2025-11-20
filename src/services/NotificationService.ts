@@ -313,8 +313,36 @@ export class NotificationService {
         return baseMessage;
       });
 
-      await admin.messaging().sendEach(messages);
-      console.log(`✅ Notificación push enviada a usuario ${userId} para préstamo ${loanId}`);
+      const response = await admin.messaging().sendEach(messages);
+      
+      // Verificar respuestas individuales
+      let successCount = 0;
+      let failureCount = 0;
+      
+      response.responses.forEach((resp, idx) => {
+        if (resp.success) {
+          successCount++;
+        } else {
+          failureCount++;
+          const tokenDoc = fcmTokenDocs[idx];
+          console.error(`[NotificationService] Error enviando a token ${tokenDoc.platform} (${tokenDoc.token.substring(0, 20)}...):`, resp.error?.message || 'Error desconocido');
+          
+          // Si el token es inválido, eliminarlo de la BD
+          if (resp.error?.code === 'messaging/invalid-registration-token' || 
+              resp.error?.code === 'messaging/registration-token-not-registered') {
+            FCMToken.deleteOne({ _id: tokenDoc._id }).catch(err => {
+              console.error(`[NotificationService] Error eliminando token inválido:`, err);
+            });
+            console.log(`[NotificationService] Token inválido eliminado: ${tokenDoc.token.substring(0, 20)}...`);
+          }
+        }
+      });
+      
+      if (successCount > 0) {
+        console.log(`✅ Notificación push enviada a usuario ${userId} para préstamo ${loanId} (${successCount} exitoso${successCount > 1 ? 's' : ''}, ${failureCount} fallido${failureCount > 1 ? 's' : ''})`);
+      } else {
+        console.error(`❌ No se pudo enviar notificación push a usuario ${userId} para préstamo ${loanId} (todos los tokens fallaron)`);
+      }
     } catch (error: unknown) {
       const firebaseError = error as { code?: string; message?: string };
       console.error('[NotificationService] Error enviando push notification:', firebaseError.message || error);
