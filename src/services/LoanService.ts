@@ -249,7 +249,9 @@ export class LoanService {
     const overdueLoans = await Loan.find({
       status: { $in: ['reservado', 'activo'] },
       endDate: { $lt: now },
-    }).populate('userId');
+    })
+      .populate('userId', 'firstName lastName email')
+      .populate('equipmentId', 'code name category');
 
     for (const loan of overdueLoans) {
       loan.status = 'vencido';
@@ -257,11 +259,120 @@ export class LoanService {
 
       // Enviar notificación
       const user = loan.userId as any;
+      const equipment = loan.equipmentId as any;
       await NotificationService.createNotification(
         user._id.toString(),
         'vencimiento',
-        `Tu préstamo del equipo ${(loan.equipmentId as any)?.code || 'N/A'} ha vencido. Por favor, devuélvelo lo antes posible.`
+        `Tu préstamo del equipo ${equipment?.code || 'N/A'} - ${equipment?.name || 'N/A'} ha vencido. Por favor, devuélvelo lo antes posible.`
       );
+    }
+  }
+
+  /**
+   * Verificar y enviar notificaciones de recordatorio para préstamos próximos a vencer
+   * Se ejecuta periódicamente para enviar recordatorios 24h antes, el día de vencimiento, y para vencidos
+   */
+  static async checkAndSendLoanReminders(): Promise<void> {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0); // Inicio del día siguiente
+
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0); // Inicio del día actual
+
+    // Obtener préstamos activos y reservados que no han sido devueltos
+    const activeLoans = await Loan.find({
+      status: { $in: ['reservado', 'activo'] },
+      returnedAt: null, // No devueltos
+    })
+      .populate('userId', 'firstName lastName email')
+      .populate('equipmentId', 'code name category');
+
+    for (const loan of activeLoans) {
+      const user = loan.userId as any;
+      const equipment = loan.equipmentId as any;
+      const userId = user._id.toString();
+      const equipmentName = equipment?.name || 'Equipo';
+      const equipmentCode = equipment?.code || 'N/A';
+      const endDate = new Date(loan.endDate);
+
+      // Calcular diferencia en días
+      const diffTime = endDate.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      // Verificar si ya se envió una notificación del mismo tipo hoy
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(now);
+      todayEnd.setHours(23, 59, 59, 999);
+
+      // Recordatorio 24h antes (mañana vence)
+      if (diffDays === 1) {
+        const alreadySent24h = await NotificationService.hasNotificationToday(
+          userId,
+          'recordatorio',
+          `El equipo "${equipmentName}" debe devolverse mañana`
+        );
+        if (!alreadySent24h) {
+          await NotificationService.sendLoanReminderPush(
+            userId,
+            equipmentName,
+            equipmentCode,
+            loan._id.toString(),
+            equipment?._id?.toString() || '',
+            endDate.toISOString(),
+            1,
+            'recordatorio_24h'
+          );
+        }
+      }
+      // Recordatorio el día de vencimiento (vence hoy)
+      else if (diffDays === 0) {
+        const alreadySentToday = await NotificationService.hasNotificationToday(
+          userId,
+          'recordatorio',
+          `El equipo "${equipmentName}" debe devolverse hoy`
+        );
+        if (!alreadySentToday) {
+          await NotificationService.sendLoanReminderPush(
+            userId,
+            equipmentName,
+            equipmentCode,
+            loan._id.toString(),
+            equipment?._id?.toString() || '',
+            endDate.toISOString(),
+            0,
+            'recordatorio_hoy'
+          );
+        }
+      }
+      // Alerta de vencimiento (ya venció)
+      else if (diffDays < 0) {
+        // Solo enviar si el préstamo aún no está marcado como vencido
+        if (loan.status !== 'vencido') {
+          loan.status = 'vencido';
+          await loan.save();
+        }
+
+        const alreadySentOverdue = await NotificationService.hasNotificationToday(
+          userId,
+          'vencimiento',
+          `El equipo "${equipmentName}" ha vencido`
+        );
+        if (!alreadySentOverdue) {
+          await NotificationService.sendLoanReminderPush(
+            userId,
+            equipmentName,
+            equipmentCode,
+            loan._id.toString(),
+            equipment?._id?.toString() || '',
+            endDate.toISOString(),
+            diffDays,
+            'vencido'
+          );
+        }
+      }
     }
   }
 }

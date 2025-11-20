@@ -126,7 +126,24 @@ export const validateLoanFilters = [
  * Validadores para notificaciones
  */
 export const validateRegisterFCM = [
-  body('fcmToken').trim().notEmpty().withMessage('El token FCM es requerido'),
+  // Aceptar tanto fcmToken como fcm_token para compatibilidad
+  body('fcmToken')
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage('El token FCM es requerido'),
+  body('fcm_token')
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage('El token FCM es requerido'),
+  // Validar que al menos uno de los dos esté presente
+  body().custom((value) => {
+    if (!value.fcmToken && !value.fcm_token) {
+      throw new Error('El token FCM es requerido (fcmToken o fcm_token)');
+    }
+    return true;
+  }),
 ];
 
 export const validateSendNotification = [

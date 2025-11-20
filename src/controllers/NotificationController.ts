@@ -95,7 +95,12 @@ export class NotificationController {
         throw new AppError('Usuario no autenticado', 401);
       }
 
-      const { fcmToken } = req.body;
+      // Aceptar tanto fcmToken (camelCase) como fcm_token (snake_case) para compatibilidad
+      const fcmToken = req.body.fcmToken || req.body.fcm_token;
+
+      if (!fcmToken) {
+        throw new AppError('El token FCM es requerido', 400);
+      }
 
       await NotificationService.registerFCMToken(userId, fcmToken);
 

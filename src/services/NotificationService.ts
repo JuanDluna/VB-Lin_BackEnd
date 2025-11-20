@@ -184,6 +184,144 @@ export class NotificationService {
   }
 
   /**
+   * Verificar si ya se envió una notificación del mismo tipo hoy
+   */
+  static async hasNotificationToday(
+    userId: string,
+    type: 'reserva' | 'recordatorio' | 'vencimiento',
+    messagePattern: string
+  ): Promise<boolean> {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const existing = await Notification.findOne({
+      userId: new Types.ObjectId(userId),
+      type,
+      message: { $regex: messagePattern, $options: 'i' },
+      sentAt: { $gte: todayStart, $lte: todayEnd },
+    });
+
+    return !!existing;
+  }
+
+  /**
+   * Enviar notificación push de recordatorio de préstamo con estructura detallada
+   */
+  static async sendLoanReminderPush(
+    userId: string,
+    equipmentName: string,
+    equipmentCode: string,
+    loanId: string,
+    equipmentId: string,
+    endDate: string,
+    daysUntilReturn: number,
+    reminderType: 'recordatorio_24h' | 'recordatorio_hoy' | 'vencido'
+  ): Promise<void> {
+    await this.initFirebase();
+
+    // Determinar título y mensaje según el tipo
+    let title: string;
+    let body: string;
+    let notificationType: 'reserva' | 'recordatorio' | 'vencimiento';
+
+    if (reminderType === 'recordatorio_24h') {
+      title = 'Recordatorio de Devolución';
+      body = `El equipo "${equipmentName}" debe devolverse mañana`;
+      notificationType = 'recordatorio';
+    } else if (reminderType === 'recordatorio_hoy') {
+      title = '¡Vence Hoy!';
+      body = `El equipo "${equipmentName}" debe devolverse hoy`;
+      notificationType = 'recordatorio';
+    } else {
+      // vencido
+      title = 'Préstamo Vencido';
+      body = `El equipo "${equipmentName}" ha vencido. Por favor, devuélvelo lo antes posible.`;
+      notificationType = 'vencimiento';
+    }
+
+    // Crear notificación en DB
+    await this.createNotification(userId, notificationType, body);
+
+    // Enviar push notification si hay tokens FCM
+    if (!admin.apps.length) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[DEV] Push notification simulado para usuario ${userId}: ${body}`);
+      }
+      return;
+    }
+
+    const fcmTokens = await this.getAllFCMTokens(userId);
+    if (fcmTokens.length === 0) {
+      return;
+    }
+
+    // Obtener información de plataforma para cada token
+    const fcmTokenDocs = await FCMToken.find({ userId: new Types.ObjectId(userId) });
+
+    try {
+      const messages = fcmTokenDocs.map((tokenDoc) => {
+        const baseMessage: admin.messaging.Message = {
+          token: tokenDoc.token,
+          notification: {
+            title,
+            body,
+          },
+          data: {
+            type: 'loan_return_reminder',
+            loanId,
+            equipmentId,
+            equipmentName,
+            equipmentCode,
+            endDate,
+            daysUntilReturn: daysUntilReturn.toString(),
+            action: 'view_loans',
+            reminderType,
+          },
+        };
+
+        // Configuración específica por plataforma
+        if (tokenDoc.platform === 'ios') {
+          baseMessage.apns = {
+            payload: {
+              aps: {
+                sound: 'default',
+                badge: 1,
+              },
+            },
+          };
+        } else if (tokenDoc.platform === 'android') {
+          baseMessage.android = {
+            priority: 'high',
+            notification: {
+              sound: 'default',
+              channelId: 'loan_reminders',
+            },
+          };
+        } else {
+          // web
+          baseMessage.webpush = {
+            notification: {
+              icon: '/icon.png',
+              badge: '/badge.png',
+              requireInteraction: true,
+            },
+          };
+        }
+
+        return baseMessage;
+      });
+
+      await admin.messaging().sendEach(messages);
+      console.log(`✅ Notificación push enviada a usuario ${userId} para préstamo ${loanId}`);
+    } catch (error: unknown) {
+      const firebaseError = error as { code?: string; message?: string };
+      console.error('[NotificationService] Error enviando push notification:', firebaseError.message || error);
+    }
+  }
+
+  /**
    * Enviar push notification usando FCM
    * Si no hay credenciales de Firebase, simula el envío y guarda notificación
    */

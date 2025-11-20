@@ -127,18 +127,32 @@ export const createApp = (): Application => {
 };
 
 /**
- * Inicia el cron job para verificar préstamos vencidos
+ * Inicia el cron job para verificar préstamos vencidos y enviar recordatorios
  */
 export const startCronJobs = (): void => {
-  // Verificar préstamos vencidos cada hora
+  // Verificar préstamos vencidos y enviar recordatorios cada 1 minuto (para pruebas)
+  // TODO: Cambiar a 30 * 60 * 1000 (30 minutos) en producción
   setInterval(async () => {
     try {
+      // Marcar préstamos vencidos
       await LoanService.checkOverdueLoans();
+      // Enviar recordatorios (24h antes, hoy, vencidos)
+      await LoanService.checkAndSendLoanReminders();
     } catch (error) {
-      console.error('Error en cron job de préstamos vencidos:', error);
+      console.error('Error en cron job de préstamos vencidos y recordatorios:', error);
     }
-  }, 60 * 60 * 1000); // Cada hora
+  }, 1 * 60 * 1000); // Cada 1 minuto (para pruebas)
 
-  console.log('✅ Cron jobs iniciados');
+  // Ejecutar inmediatamente al iniciar
+  (async () => {
+    try {
+      await LoanService.checkOverdueLoans();
+      await LoanService.checkAndSendLoanReminders();
+    } catch (error) {
+      console.error('Error en ejecución inicial de cron jobs:', error);
+    }
+  })();
+
+  console.log('✅ Cron jobs iniciados (verificación cada 1 minuto - MODO PRUEBA)');
 };
 
