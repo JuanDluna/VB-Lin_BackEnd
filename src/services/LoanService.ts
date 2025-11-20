@@ -162,7 +162,16 @@ export class LoanService {
       `Tu reserva para el equipo ${equipment.code} ha sido creada exitosamente.`
     );
 
-    return loan;
+    // Poblar equipmentId y userId antes de devolver
+    const populatedLoan = await Loan.findById(loan._id)
+      .populate('userId', 'firstName lastName email role')
+      .populate('equipmentId', 'code name category');
+
+    if (!populatedLoan) {
+      throw new AppError('Error al obtener préstamo creado', 500);
+    }
+
+    return populatedLoan;
   }
 
   /**
@@ -190,17 +199,26 @@ export class LoanService {
    * Devolver préstamo
    */
   static async returnLoan(id: string, returnRemarks?: string, userId?: string): Promise<ILoan> {
-    const loan = await Loan.findById(id).populate('equipmentId');
+    const loan = await Loan.findById(id)
+      .populate('userId', 'firstName lastName email role')
+      .populate('equipmentId', 'code name category');
 
     if (!loan) {
       throw new AppError('Préstamo no encontrado', 404);
     }
 
     // Verificar que el usuario que devuelve sea el dueño del préstamo o admin
-    if (userId && loan.userId.toString() !== userId) {
-      const user = await User.findById(userId);
-      if (!user || user.role !== 'admin') {
-        throw new AppError('No tienes permisos para devolver este préstamo', 403);
+    if (userId) {
+      // Obtener el ID del usuario del préstamo (puede estar poblado o no)
+      const loanUserId = (loan.userId as any)._id 
+        ? (loan.userId as any)._id.toString() 
+        : loan.userId.toString();
+      
+      if (loanUserId !== userId) {
+        const user = await User.findById(userId);
+        if (!user || user.role !== 'admin') {
+          throw new AppError('No tienes permisos para devolver este préstamo', 403);
+        }
       }
     }
 
@@ -226,7 +244,16 @@ export class LoanService {
       await equipment.save();
     }
 
-    return loan;
+    // Volver a poblar después de guardar para asegurar datos actualizados
+    const updatedLoan = await Loan.findById(id)
+      .populate('userId', 'firstName lastName email role')
+      .populate('equipmentId', 'code name category');
+
+    if (!updatedLoan) {
+      throw new AppError('Error al obtener préstamo actualizado', 500);
+    }
+
+    return updatedLoan;
   }
 
   /**
