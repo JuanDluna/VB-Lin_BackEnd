@@ -169,3 +169,29 @@ export const validateMongoId = (field: string = 'id'): ValidationChain[] => {
   return [param(field).isMongoId().withMessage(`ID inválido para ${field}`)];
 };
 
+/**
+ * Validadores para dashboard
+ */
+export const validateDashboardFilters = [
+  query('startDate')
+    .optional()
+    .isISO8601()
+    .withMessage('startDate debe ser una fecha válida en formato ISO8601'),
+  query('endDate')
+    .optional()
+    .isISO8601()
+    .withMessage('endDate debe ser una fecha válida en formato ISO8601'),
+  query('topEquipmentLimit')
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage('topEquipmentLimit debe ser un número entre 1 y 50'),
+  query('topUsersLimit')
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage('topUsersLimit debe ser un número entre 1 y 50'),
+  query('daysLimit')
+    .optional()
+    .isInt({ min: 1, max: 365 })
+    .withMessage('daysLimit debe ser un número entre 1 y 365'),
+];
+
