@@ -1,11 +1,11 @@
 import { getRedisClient, closeRedis } from '../utils/redis';
 
 /**
- * Verifica conexión a Redis usando ioredis
+ * Verifica conexión a Redis
  */
 export const checkRedisConnection = async (): Promise<boolean> => {
   try {
-    const client = getRedisClient();
+    const client = await getRedisClient();
     const result = await client.ping();
     if (result === 'PONG') {
       console.log('✅ Redis conectado exitosamente');

@@ -247,8 +247,8 @@ export class AuthService {
 
     // Guardar token en Redis
     const { getRedisClient } = await import('../utils/redis');
-    const client = getRedisClient();
-    await client.setex(
+    const client = await getRedisClient();
+    await client.setEx(
       `reset:${user._id.toString()}:${resetToken}`,
       3600,
       resetTokenExpiry.toISOString()
@@ -266,27 +266,19 @@ export class AuthService {
    * Resetear contraseña usando token
    */
   static async resetPassword(token: string, newPassword: string): Promise<void> {
-    // Buscar token en Redis usando scanStream (más eficiente que keys)
+    // Buscar token en Redis usando scanIterator (más eficiente que keys)
     const { getRedisClient } = await import('../utils/redis');
-    const client = getRedisClient();
+    const client = await getRedisClient();
     const pattern = `reset:*:${token}`;
     const keys: string[] = [];
     
-    // Escanear Redis usando scanStream para mejor rendimiento
-    const stream = client.scanStream({
-      match: pattern,
-      count: 100,
-    });
-    
-    stream.on('data', (resultKeys: string[]) => {
-      keys.push(...resultKeys);
-    });
-    
-    await new Promise<void>((resolve) => {
-      stream.on('end', () => {
-        resolve();
-      });
-    });
+    // Escanear Redis usando scanIterator para mejor rendimiento
+    for await (const key of client.scanIterator({
+      MATCH: pattern,
+      COUNT: 100,
+    })) {
+      keys.push(key);
+    }
 
     if (keys.length === 0) {
       throw new AppError('Token de recuperación inválido o expirado', 400);

@@ -19,11 +19,10 @@ export const config = {
   // MongoDB - Nombre de BD: VB-Lin_BackEnd
   mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27017/VB-Lin_BackEnd',
 
-  // Redis
-  redisHost: process.env.REDIS_HOST || 'localhost',
-  redisPort: parseInt(process.env.REDIS_PORT || '6379', 10),
-  redisPassword: process.env.REDIS_PASSWORD || undefined,
-  redisTLS: process.env.REDIS_TLS === 'true' || process.env.REDIS_TLS === '1',
+  // Redis - Configuración para Upstash
+  // Upstash requiere: REDIS_URL (ej: redis://xxxxx.upstash.io:6379) + REDIS_TOKEN
+  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  redisToken: process.env.REDIS_TOKEN || undefined, // Upstash usa TOKEN, no password
 
   // SMTP
   smtp: {
