@@ -19,6 +19,7 @@ export const getRedisClient = (): Redis => {
   redisClient = new Redis({
     host: config.redisHost,
     port: config.redisPort,
+    password: config.redisPassword,
     retryStrategy: (times: number) => {
       // Estrategia de reintentos: esperar hasta 10 segundos
       const delay = Math.min(times * 50, 10000);

@@ -69,9 +69,17 @@ export const createApp = (): Application => {
   app.use(
     cors({
       // En desarrollo, permitir todos los orígenes para facilitar desarrollo con Flutter/móviles
+      // En producción, usar lista específica de orígenes permitidos (configurados en ALLOWED_ORIGINS)
       origin: config.nodeEnv === 'development' 
         ? true  // Permite todos los orígenes en desarrollo
-        : config.allowedOrigins,  // En producción, usar lista específica
+        : (origin, callback) => {
+            // En producción, verificar si el origen está en la lista permitida
+            if (!origin || config.allowedOrigins.includes(origin)) {
+              callback(null, true);
+            } else {
+              callback(new Error('No permitido por CORS'));
+            }
+          },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
