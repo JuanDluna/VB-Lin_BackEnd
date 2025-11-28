@@ -23,6 +23,7 @@ export const config = {
   redisHost: process.env.REDIS_HOST || 'localhost',
   redisPort: parseInt(process.env.REDIS_PORT || '6379', 10),
   redisPassword: process.env.REDIS_PASSWORD || undefined,
+  redisTLS: process.env.REDIS_TLS === 'true' || process.env.REDIS_TLS === '1',
 
   // SMTP
   smtp: {

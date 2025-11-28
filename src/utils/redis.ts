@@ -16,20 +16,55 @@ export const getRedisClient = (): Redis => {
     return redisClient;
   }
 
-  redisClient = new Redis({
+  // Configuración base
+  const redisConfig: {
+    host: string;
+    port: number;
+    password?: string;
+    retryStrategy: (times: number) => number;
+    maxRetriesPerRequest: null;
+    enableReadyCheck: boolean;
+    enableOfflineQueue: boolean;
+    connectTimeout: number;
+    lazyConnect: boolean;
+    tls?: { rejectUnauthorized: boolean };
+  } = {
     host: config.redisHost,
     port: config.redisPort,
-    password: config.redisPassword,
     retryStrategy: (times: number) => {
       // Estrategia de reintentos: esperar hasta 10 segundos
       const delay = Math.min(times * 50, 10000);
       return delay;
     },
-    maxRetriesPerRequest: 3,
-  });
+    maxRetriesPerRequest: null, // null = reintentar indefinidamente (mejor para producción)
+    enableReadyCheck: true,
+    enableOfflineQueue: true, // Permite encolar comandos cuando está desconectado
+    connectTimeout: 10000, // 10 segundos para conectar
+    lazyConnect: false,
+  };
+
+  // Agregar password solo si existe (Upstash requiere password)
+  if (config.redisPassword) {
+    redisConfig.password = config.redisPassword;
+  }
+
+  // Upstash requiere TLS - detectar automáticamente si es Upstash
+  const isUpstash = config.redisHost.includes('upstash.io') || config.redisHost.includes('upstash.com');
+  if (isUpstash || process.env.REDIS_TLS === 'true') {
+    redisConfig.tls = {
+      rejectUnauthorized: false, // Para servicios en la nube como Upstash
+    };
+  }
+
+  redisClient = new Redis(redisConfig);
 
   redisClient.on('error', (err: Error) => {
-    console.error('❌ Redis Client Error:', err);
+    // No loguear errores de ECONNRESET si es temporal (se reconectará automáticamente)
+    if (err.message.includes('ECONNRESET') || err.message.includes('ECONNREFUSED')) {
+      console.warn('⚠️ Redis desconectado temporalmente, reconectando...');
+    } else {
+      console.error('❌ Redis Client Error:', err);
+    }
   });
 
   redisClient.on('connect', () => {
@@ -38,6 +73,14 @@ export const getRedisClient = (): Redis => {
 
   redisClient.on('ready', () => {
     console.log('✅ Redis listo');
+  });
+
+  redisClient.on('close', () => {
+    console.warn('⚠️ Conexión Redis cerrada');
+  });
+
+  redisClient.on('reconnecting', () => {
+    console.log('🔄 Redis reconectando...');
   });
 
   return redisClient;
