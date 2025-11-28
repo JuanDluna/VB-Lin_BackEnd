@@ -17,7 +17,9 @@
     "test:integration:watch": "jest --testPathPattern=integration --watch",
     "lint": "eslint src tests --ext .ts",
     "lint:fix": "eslint src tests --ext .ts --fix",
-    "wait-for-db": "tsx scripts/wait-for-db.ts"
+    "wait-for-db": "tsx scripts/wait-for-db.ts",
+    "clear-loans": "tsx scripts/clear-loans.ts",
+    "clear-loans:delete": "tsx scripts/clear-loans.ts delete"
   },
   "keywords": [
     "express",
