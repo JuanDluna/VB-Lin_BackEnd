@@ -273,11 +273,17 @@ export class AuthService {
     const keys: string[] = [];
     
     // Escanear Redis usando scanIterator para mejor rendimiento
-    for await (const key of client.scanIterator({
+    const iterator = client.scanIterator({
       MATCH: pattern,
       COUNT: 100,
-    })) {
-      keys.push(key);
+    });
+    
+    for await (const key of iterator) {
+      if (typeof key === 'string') {
+        keys.push(key);
+      } else if (Array.isArray(key)) {
+        keys.push(...key);
+      }
     }
 
     if (keys.length === 0) {
