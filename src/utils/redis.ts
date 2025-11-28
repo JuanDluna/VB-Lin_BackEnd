@@ -34,6 +34,25 @@ export const getRedisClient = async (): Promise<RedisClientType> => {
   isConnecting = true;
 
   try {
+    // Normalizar URL de Redis (convertir https:// a redis:// o rediss://)
+    let redisUrl = config.redisUrl;
+    
+    // Si la URL tiene https://, convertir a rediss:// (Redis con TLS)
+    if (redisUrl.startsWith('https://')) {
+      redisUrl = redisUrl.replace('https://', 'rediss://');
+      console.log('⚠️ Convertida URL Redis de https:// a rediss://');
+    }
+    // Si tiene http://, convertir a redis://
+    else if (redisUrl.startsWith('http://')) {
+      redisUrl = redisUrl.replace('http://', 'redis://');
+      console.log('⚠️ Convertida URL Redis de http:// a redis://');
+    }
+    // Si no tiene protocolo, agregar redis://
+    else if (!redisUrl.startsWith('redis://') && !redisUrl.startsWith('rediss://')) {
+      redisUrl = `redis://${redisUrl}`;
+      console.log('⚠️ Agregado protocolo redis:// a la URL');
+    }
+
     // Configuración para Upstash
     const redisConfig: {
       url: string;
@@ -42,7 +61,7 @@ export const getRedisClient = async (): Promise<RedisClientType> => {
         reconnectStrategy: (retries: number) => number | Error;
       };
     } = {
-      url: config.redisUrl,
+      url: redisUrl,
       socket: {
         reconnectStrategy: (retries: number) => {
           if (retries > 10) {
